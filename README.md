@@ -1,34 +1,50 @@
-# Simple Video/Audio Downloader
+# YT.DOWN
 
-A simple CLI tool built with Python using yt-dlp.
+A simple video downloader with a GUI. Paste a URL, pick a folder, and click download. No browser extensions, no ads, no accounts.
+Built with Python + yt-dlp.
 
-## Features
+---
 
-* Download videos from YouTube and other platforms
-* Choose video quality (360p, 720p, 1080p)
-* Extract audio as MP3
-* Custom output filename/path
-* Clean progress output
+## Before you run it
 
-## Usage
+You need these two installed:
 
-Download video:
-python downloader.py <url>
+```bash
+pip install yt-dlp
+```
 
-Download with quality:
-python downloader.py <url> -q 720
+And **ffmpeg** — grab it from [ffmpeg.org](https://ffmpeg.org/download.html) and make sure it's on your PATH. If it's not, the app will tell you when it opens.
 
-Download as MP3:
-python downloader.py <url> --audio
+---
 
-Custom filename:
-python downloader.py <url> -o myvideo.mp4
+## Running it
 
-Verbose mode:
-python downloader.py <url> -v
+```bash
+python downloader_gui.py
+```
+
+A window opens. Paste your URL, choose where to save, hit Download.
+
+---
+
+## What it can do
+
+- Download video as MP4
+- Download audio only as MP3
+- Pick quality (best, 1080p, 720p, 480p, 360p)
+- Works with YouTube, Vimeo, Twitter, TikTok, and a lot more — basically anything yt-dlp supports
+- "List available formats" button if you're curious what's there before downloading
+
+---
 
 ## Requirements
 
-* Python 3
-* yt-dlp installed
-* ffmpeg installed
+- Python 3.9 or higher
+- yt-dlp
+- ffmpeg
+
+---
+
+## Author
+
+[ArtfulDodger10](https://github.com/ArtfulDodger10)
