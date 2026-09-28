@@ -1,4 +1,5 @@
-﻿import itertools
+import itertools
+from pathlib import Path
 
 import pytest
 import yt_dlp
@@ -9,7 +10,8 @@ from ytdown.options import (build_args, clean_error, extract_targets, hint_for,
 from ytdown.settings import (AUDIO_FORMATS, SPONSORBLOCK_MODES, VIDEO_CODECS, VIDEO_CONTAINERS,
                              VIDEO_QUALITIES, Settings)
 
-ENV = Environment(ytdlp_version="x", ffmpeg=r"C:\tools\ffmpeg.exe", js_runtimes={"node": "node"},
+FFMPEG_DIR = str(Path("tools"))  # platform-neutral fake location
+ENV = Environment(ytdlp_version="x", ffmpeg=str(Path("tools") / "ffmpeg.exe"), js_runtimes={"node": "node"},
                   has_ejs=True)
 
 
@@ -77,7 +79,7 @@ def test_network_and_tool_flags(tmp_path):
     assert o["cookiesfrombrowser"][0] == "firefox"
     assert "no-certifi" in o["compat_opts"]
     assert o["download_archive"] == str(tmp_path / "a.txt")
-    assert o["ffmpeg_location"] == r"C:\tools"
+    assert o["ffmpeg_location"] == FFMPEG_DIR
     assert "node" in o["js_runtimes"]
 
 
