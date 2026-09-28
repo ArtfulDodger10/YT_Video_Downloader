@@ -51,6 +51,27 @@ jobs:
             "$((Get-FileHash $_ -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
           } | Out-File dist/SHA256SUMS.txt -Encoding ascii
 
+      - name: Release title and notes
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          # Title = the annotated tag's message (git tag -a v2.1.0 -m "YTDown 2.1.0 - ...")
+          git fetch --force --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}"
+          $title = (git tag -l --format='%(contents:subject)' $tag).Trim()
+          if (-not $title) { $title = "YTDown $($tag.TrimStart('v'))" }
+          "RELEASE_TITLE=$title" >> $env:GITHUB_ENV
+          # Notes = this version's section of CHANGELOG.md
+          $ver = [regex]::Escape($tag.TrimStart('v'))
+          $log = Get-Content CHANGELOG.md -Raw
+          $m = [regex]::Match($log, "(?ms)^## \[$ver\][^\n]*\n(.*?)(?=^## \[|\z)")
+          $notes = if ($m.Success) { $m.Groups[1].Value.Trim() } else { "See CHANGELOG.md" }
+          $notes += "`n`n---`n**Download:** ``YTDown-$($tag.TrimStart('v'))-windows-x64.zip`` below, unzip and run ``YTDown.exe`` (FFmpeg included). "
+          $notes += "For full YouTube quality also install Deno (the app offers a one-click install). "
+          $notes += "Windows may show a SmartScreen prompt because the app isn't code-signed: *More info > Run anyway*. "
+          $notes += "Verify the download with ``SHA256SUMS.txt``."
+          Set-Content release-notes.md $notes -Encoding utf8
+
       - uses: actions/upload-artifact@v4
         with:
           name: YTDown-windows
@@ -62,7 +83,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          name: ${{ env.RELEASE_TITLE }}
+          body_path: release-notes.md
           files: |
             dist/*.zip
             dist/SHA256SUMS.txt
-          generate_release_notes: true

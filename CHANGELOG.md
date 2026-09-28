@@ -1,4 +1,4 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
@@ -44,6 +44,7 @@ A complete rewrite of the original single-script downloader.
 - Failures behind antivirus HTTPS scanning (`CERTIFICATE_VERIFY_FAILED`).
 - Two videos whose titles differ only by letter case overwrote each other on Windows.
 - The same video queued twice raced on one file.
+- Occasional YouTube "HTTP Error 403" failures (now retried automatically with fresh info).
 
 ## [1.0.0]
 - Initial Tkinter script: single URL, MP4/MP3, fixed quality presets.
