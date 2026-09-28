@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "yt-dlp[default]>=2025.11.12",
-    "PySide6-Essentials>=6.6",
+    "PySide6-Essentials>=6.11.2",
 ]
 
 [project.optional-dependencies]
