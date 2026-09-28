@@ -162,3 +162,33 @@ def test_queue_snapshot_roundtrip(tmp_path):
     restored = Job.from_dict(snap[0])
     assert restored.settings.mode == "audio"
     assert (restored.subdir, restored.prefix) == ("List", "01 - ")
+
+
+@needs_ffmpeg
+def test_probe_then_download_reuses_the_extracted_info(server, tmp_path):
+    from ytdown.probe import probe
+    s = settings(tmp_path)
+    r = probe(f"{server.url}/clip.mp4", s, ENV)
+    assert r.kind == "video" and r.info and r.title == "clip"
+    m = DownloadManager(ENV)
+    job = m.add(r.url, s, prefetched=r.info, prefetched_at=r.fetched_at, title=r.title)
+    assert m.wait(60)
+    assert job.status == Status.DONE, job.error
+    assert not any("Extracting URL" in line for line in job.log), "should not extract twice"
+
+
+def test_probe_reports_errors_with_hint(server, tmp_path):
+    from ytdown.probe import probe
+    r = probe(f"{server.url}/missing.mp4", settings(tmp_path), ENV)
+    assert r.kind == "error"
+    assert "404" in r.error and r.hint
+
+
+def test_stale_prefetch_falls_back_to_fresh_extraction(server, tmp_path):
+    m = DownloadManager(ENV)
+    bogus = {"_type": "video", "id": "x", "title": "x", "url": f"{server.url}/gone.bin", "ext": "mp4"}
+    (server.root / "fresh.mp4").write_bytes(os.urandom(20_000))
+    job = m.add(f"{server.url}/fresh.mp4", settings(tmp_path), prefetched=bogus,
+                prefetched_at=time.time())
+    assert m.wait(60)
+    assert job.status == Status.DONE, job.error

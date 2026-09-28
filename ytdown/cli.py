@@ -1,10 +1,9 @@
-"""Command-line front end sharing the GUI's engine and saved settings."""
+﻿"""Command-line front end sharing the GUI's engine and saved settings."""
 
 from __future__ import annotations
 
 import argparse
 import sys
-import time
 from dataclasses import replace
 
 from . import __version__
@@ -23,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("targets", nargs="*", help="URLs or search terms")
     p.add_argument("-a", "--audio", action="store_true", help="audio only")
     p.add_argument("-q", "--quality", choices=[v for v, _ in VIDEO_QUALITIES])
-    p.add_argument("-f", "--format", help="container (%s) or audio format (%s)" % (
+    p.add_argument("-f", "--format", help="container ({}) or audio format ({})".format(
         "/".join(v for v, _ in VIDEO_CONTAINERS), "/".join(v for v, _ in AUDIO_FORMATS)))
     p.add_argument("-o", "--output", help="download folder")
     p.add_argument("-j", "--jobs", type=int, help="simultaneous downloads")
@@ -31,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
                    help="download the whole playlist when a video URL is part of one")
     p.add_argument("-I", "--items", help="playlist items, e.g. 1-5,8,10-")
     p.add_argument("--cookies-from-browser", choices=[v for v, _ in BROWSERS if v])
-    p.add_argument("--gui", action="store_true", help="open the GUI")
+    p.add_argument("--gui", action="store_true", help="open the GUI (and queue any given links)")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
 

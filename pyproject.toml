@@ -5,18 +5,30 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ytdown"
 dynamic = ["version"]
-description = "Fast, queue-based video & audio downloader (GUI + CLI) powered by yt-dlp"
+description = "Modern, fast video & audio downloader for YouTube and 1,800+ sites (GUI + CLI), powered by yt-dlp"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "ArtfulDodger10" }]
+keywords = ["youtube", "downloader", "yt-dlp", "video", "audio", "mp3", "playlist", "gui"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Multimedia :: Sound/Audio",
+]
 dependencies = [
     "yt-dlp[default]>=2025.11.12",
-    "sv-ttk>=2.6",
+    "PySide6-Essentials>=6.6",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pyinstaller>=6"]
+dev = ["pytest>=8", "ruff>=0.6", "pyinstaller>=6", "pillow>=10"]
 
 [project.scripts]
 ytdown = "ytdown.cli:main"
@@ -26,9 +38,14 @@ ytdown-gui = "ytdown.gui.app:main"
 
 [project.urls]
 Homepage = "https://github.com/ArtfulDodger10/YT_Video_Downloader"
+Issues = "https://github.com/ArtfulDodger10/YT_Video_Downloader/issues"
+Changelog = "https://github.com/ArtfulDodger10/YT_Video_Downloader/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 packages = ["ytdown", "ytdown.gui"]
+
+[tool.setuptools.package-data]
+ytdown = ["assets/*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "ytdown.__version__" }
@@ -36,3 +53,14 @@ version = { attr = "ytdown.__version__" }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP"]
+ignore = ["B008", "E731"]
+
+[tool.ruff.lint.per-file-ignores]
+"ytdown/gui/icons.py" = ["E501"]

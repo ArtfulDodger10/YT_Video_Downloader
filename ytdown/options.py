@@ -1,4 +1,4 @@
-"""Translate Settings into yt-dlp command-line arguments.
+﻿"""Translate Settings into yt-dlp command-line arguments.
 
 Building a real argv (instead of hand-writing the options dict) lets yt-dlp's own
 parser wire up postprocessors exactly like the official CLI does, and lets users add
@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 import shlex
-from typing import Optional
 
 from .deps import Environment
 from .settings import Settings
@@ -18,7 +17,7 @@ _URL_RE = re.compile(r"https?://[^\s<>\"']+", re.I)
 
 
 def build_args(s: Settings, env: Environment, *, subdir: str = "", prefix: str = "",
-               noplaylist: Optional[bool] = None, archive_path: Optional[str] = None) -> list[str]:
+               noplaylist: bool | None = None, archive_path: str | None = None) -> list[str]:
     """Return yt-dlp arguments (without the URL) for one download job."""
     a: list[str] = ["--ignore-config", "--abort-on-error", "--no-progress", "--no-color"]
     video = s.mode == "video"
@@ -118,7 +117,7 @@ def split_args(text: str) -> list[str]:
     return shlex.split(text, posix=True)
 
 
-def validate_extra_args(text: str) -> Optional[str]:
+def validate_extra_args(text: str) -> str | None:
     """Return an error message if the user's extra yt-dlp arguments don't parse."""
     if not text.strip():
         return None
@@ -191,6 +190,7 @@ _HINTS = [
     (("requested format is not available", "no video formats"),
      "That quality/format isn't offered. Pick 'Best available' or another container."),
     (("unsupported url",), "This link isn't supported by yt-dlp."),
+    (("http error 404", "404: not found"), "Nothing was found at this address. Check that the link is complete."),
     (("private video", "video unavailable", "has been removed", "not available in your country"),
      "The video is private, removed or region-locked."),
     (("unable to download webpage", "getaddrinfo", "timed out", "connection reset",
@@ -217,4 +217,5 @@ def clean_error(msg: str) -> str:
     msg = _ANSI.sub("", str(msg)).strip()
     msg = re.sub(r"^ERROR:\s*", "", msg)
     msg = re.sub(r";?\s*please report this issue on\s+https://\S+.*$", "", msg, flags=re.S | re.I)
+    msg = re.sub(r"\s*\(caused by <?[A-Za-z]+Error.*?\)\s*$", "", msg, flags=re.S)
     return msg.strip()

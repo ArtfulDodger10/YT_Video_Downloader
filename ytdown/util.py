@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from typing import Optional
 
 
 def ensure_std_streams():
@@ -16,7 +15,7 @@ def ensure_std_streams():
         sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
 
-def human_bytes(n: Optional[float]) -> str:
+def human_bytes(n: float | None) -> str:
     if not n:
         return "–"
     for unit in ("B", "KB", "MB", "GB"):
@@ -26,7 +25,7 @@ def human_bytes(n: Optional[float]) -> str:
     return f"{n:.2f} TB"
 
 
-def human_eta(seconds: Optional[float]) -> str:
+def human_eta(seconds: float | None) -> str:
     if seconds is None:
         return "–"
     seconds = int(seconds)

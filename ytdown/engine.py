@@ -17,7 +17,7 @@ import traceback
 from collections import deque
 from dataclasses import dataclass, field, replace
 from enum import Enum
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import yt_dlp
 from yt_dlp.utils import DownloadCancelled, DownloadError, sanitize_filename
@@ -68,17 +68,23 @@ class Job:
     title: str = ""
     subdir: str = ""
     prefix: str = ""
-    noplaylist: Optional[bool] = None
-    ie_key: Optional[str] = None
+    noplaylist: bool | None = None
+    ie_key: str | None = None
     depth: int = 0
+    thumbnail: str = ""
+    uploader: str = ""
+    site: str = ""
+    duration: float | None = None
+    prefetched: dict | None = field(default=None, repr=False)  # info from a preview probe
+    prefetched_at: float = 0.0
     id: int = field(default_factory=lambda: next(_ids))
     status: Status = Status.QUEUED
     detail: str = ""
     progress: float = 0.0
     downloaded: int = 0
-    total: Optional[int] = None
-    speed: Optional[float] = None
-    eta: Optional[int] = None
+    total: int | None = None
+    speed: float | None = None
+    eta: int | None = None
     format_note: str = ""
     files: list = field(default_factory=list)
     temp_files: set = field(default_factory=set)
@@ -86,8 +92,8 @@ class Job:
     hint: str = ""
     log: deque = field(default_factory=lambda: deque(maxlen=400))
     cancel_event: threading.Event = field(default_factory=threading.Event)
-    started_at: Optional[float] = None
-    finished_at: Optional[float] = None
+    started_at: float | None = None
+    finished_at: float | None = None
     remove_when_done: bool = False
 
     @property
@@ -118,21 +124,67 @@ class Job:
     def to_dict(self) -> dict:
         return {"url": self.url, "settings": self.settings.to_dict(), "title": self.title,
                 "subdir": self.subdir, "prefix": self.prefix, "noplaylist": self.noplaylist,
-                "ie_key": self.ie_key, "depth": self.depth}
+                "ie_key": self.ie_key, "depth": self.depth, "thumbnail": self.thumbnail,
+                "uploader": self.uploader, "site": self.site, "duration": self.duration}
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Job":
+    def from_dict(cls, d: dict) -> Job:
         return cls(url=str(d["url"]), settings=Settings.from_dict(d.get("settings") or {}),
                    title=str(d.get("title") or ""), subdir=str(d.get("subdir") or ""),
                    prefix=str(d.get("prefix") or ""), noplaylist=d.get("noplaylist"),
-                   ie_key=d.get("ie_key"), depth=int(d.get("depth") or 0))
+                   ie_key=d.get("ie_key"), depth=int(d.get("depth") or 0),
+                   thumbnail=str(d.get("thumbnail") or ""), uploader=str(d.get("uploader") or ""),
+                   site=str(d.get("site") or ""),
+                   duration=d.get("duration") if isinstance(d.get("duration"), (int, float)) else None)
+
+    def absorb(self, info: dict) -> bool:
+        """Fill in display metadata from a yt-dlp info dict. Returns True if anything changed."""
+        before = (self.title, self.thumbnail, self.uploader, self.site, self.duration)
+        self.title = self.title or str(info.get("title") or "")
+        self.thumbnail = self.thumbnail or best_thumbnail(info)
+        self.uploader = self.uploader or str(info.get("uploader") or info.get("channel")
+                                             or info.get("playlist_uploader") or "")
+        self.site = self.site or str(info.get("extractor_key") or info.get("ie_key") or "")
+        if self.duration is None and isinstance(info.get("duration"), (int, float)):
+            self.duration = info["duration"]
+        return before != (self.title, self.thumbnail, self.uploader, self.site, self.duration)
+
+
+_STANDARD = ((7680, 4320), (3840, 2160), (2560, 1440), (1920, 1080), (1280, 720), (854, 480),
+             (640, 360), (426, 240), (256, 144))
+
+
+def quality_label(width, height) -> str:
+    """Resolution as people name it: 1920x872 (wide film) and 1080x1920 (vertical) are "1080p"."""
+    w, h = (width or 0), (height or 0)
+    if not h:
+        return ""
+    short, long_ = min(w or h, h), max(w, h)
+    for _, sh in _STANDARD:
+        if abs(short - sh) <= sh * 0.03:  # already a standard height (incl. 2560x1080 ultrawide)
+            return f"{sh}p"
+    by_short = max((sh for _, sh in _STANDARD if sh <= short), default=short)
+    by_long = max((sh for sw, sh in _STANDARD if sw <= long_ * 1.06), default=0)
+    return f"{max(by_short, by_long)}p"
+
+
+def best_thumbnail(info: dict) -> str:
+    """A reasonably sized thumbnail URL (prefers ~480-720px wide images)."""
+    thumbs = [t for t in (info.get("thumbnails") or []) if isinstance(t, dict) and t.get("url")]
+    if thumbs:
+        sized = [t for t in thumbs if t.get("width")]
+        if sized:
+            fit = [t for t in sized if 320 <= t["width"] <= 1280] or sized
+            return min(fit, key=lambda t: abs(t["width"] - 480))["url"]
+        return thumbs[-1]["url"]
+    return str(info.get("thumbnail") or "")
 
 
 class _JobLogger:
     """Receives yt-dlp's messages for a single job."""
 
-    def __init__(self, manager: "DownloadManager", job: Job,
-                 watch: Optional[Callable[[str], None]] = None):
+    def __init__(self, manager: DownloadManager, job: Job,
+                 watch: Callable[[str], None] | None = None):
         self.m, self.job, self.watch = manager, job, watch
 
     def debug(self, msg):
@@ -164,9 +216,10 @@ LogHandler = Callable[[str, str], None]    # (level, message)
 
 class DownloadManager:
     MAX_DEPTH = 3
+    PREFETCH_TTL = 20 * 60  # seconds a preview's info may be reused (stream URLs expire)
 
-    def __init__(self, env: Environment, on_event: Optional[EventHandler] = None,
-                 on_log: Optional[LogHandler] = None, archive_path: Optional[str] = None,
+    def __init__(self, env: Environment, on_event: EventHandler | None = None,
+                 on_log: LogHandler | None = None, archive_path: str | None = None,
                  max_concurrent: int = 3):
         self.env = env
         self.on_event = on_event or (lambda kind, job: None)
@@ -183,7 +236,7 @@ class DownloadManager:
 
     # ---- public API (thread-safe) ---------------------------------------
 
-    def add(self, url: str, settings: Settings, **kw) -> Optional[Job]:
+    def add(self, url: str, settings: Settings, **kw) -> Job | None:
         """Queue a URL. Returns None if the same URL is already queued or running."""
         with self._lock:
             if any(j.url == url and not j.is_finished for j in self.jobs):
@@ -280,7 +333,7 @@ class DownloadManager:
         with self._lock:
             return [j.to_dict() for j in self.jobs if not j.is_finished]
 
-    def wait(self, timeout: Optional[float] = None) -> bool:
+    def wait(self, timeout: float | None = None) -> bool:
         """Block until nothing is queued or running (or paused with nothing running)."""
         end = None if timeout is None else time.time() + timeout
         with self._idle:
@@ -387,16 +440,10 @@ class DownloadManager:
             "noprogress": True,
         })
         self._check_cancel(job)
+        prefetched = job.prefetched if time.time() - job.prefetched_at < self.PREFETCH_TTL else None
+        job.prefetched = None  # free memory; retries extract fresh info
         with yt_dlp.YoutubeDL(opts) as ydl:
-            ie = ydl.extract_info(job.url, download=False, process=False, ie_key=job.ie_key)
-            for _ in range(3):  # follow plain redirects (short links etc.)
-                if ie and ie.get("_type") == "url" and ie.get("url"):
-                    ie = ydl.extract_info(ie["url"], download=False, process=False,
-                                          ie_key=ie.get("ie_key"))
-                else:
-                    break
-            if not ie:
-                raise DownloadError("Nothing to download (extractor returned no result).")
+            ie = prefetched or self._extract(ydl, job)
             self._check_cancel(job)
 
             if ie.get("_type") in ("playlist", "multi_video"):
@@ -404,23 +451,20 @@ class DownloadManager:
                 self._expand(job, flat or ie)
                 return
 
-            if ie.get("title") and not job.title:
-                job.title = ie["title"]
+            if job.absorb(ie):
                 self.on_event("changed", job)
-            stem = self._claim_filename(ydl, ie, job)
-            lock = self._stem_lock(stem)
-            # Two jobs for the same output (e.g. a link that also appears in a search or
-            # playlist) run one after the other; the second then sees the finished file.
-            while not lock.acquire(timeout=0.3):
-                self._check_cancel(job)
-                if job.detail != "Waiting for a duplicate to finish…":
-                    job.detail = "Waiting for a duplicate to finish…"
-                    self.on_event("changed", job)
             try:
-                job.detail = ""
-                ydl.process_ie_result(ie, download=True)
-            finally:
-                lock.release()
+                self._download_video(ydl, ie, job)
+            except DownloadError as e:
+                # Stream links can expire (a preview's info is minutes old) and YouTube sometimes
+                # refuses one with HTTP 403; fresh info fixes both. Partial data is resumed.
+                stale = prefetched and not state["downloaded_any"]
+                if job.cancel_event.is_set() or not (stale or "403" in str(e)):
+                    raise
+                self._log("info", f"#{job.id} retrying once with fresh video info")
+                job.detail = "Retrying…"
+                self.on_event("changed", job)
+                self._download_video(ydl, self._extract(ydl, job), job)
 
         self._check_cancel(job)
         if job.files:
@@ -435,6 +479,34 @@ class DownloadManager:
             self._finish(job, Status.SKIPPED, "Already downloaded (archive)")
         else:
             self._finish(job, Status.SKIPPED, "Nothing downloaded (filtered or unavailable)")
+
+    def _extract(self, ydl, job: Job) -> dict:
+        ie = ydl.extract_info(job.url, download=False, process=False, ie_key=job.ie_key)
+        for _ in range(3):  # follow plain redirects (short links etc.)
+            if ie and ie.get("_type") == "url" and ie.get("url"):
+                ie = ydl.extract_info(ie["url"], download=False, process=False,
+                                      ie_key=ie.get("ie_key"))
+            else:
+                break
+        if not ie:
+            raise DownloadError("Nothing to download (extractor returned no result).")
+        return ie
+
+    def _download_video(self, ydl, ie: dict, job: Job):
+        stem = self._claim_filename(ydl, ie, job)
+        lock = self._stem_lock(stem)
+        # Two jobs for the same output (e.g. a link that also appears in a search or
+        # playlist) run one after the other; the second then sees the finished file.
+        while not lock.acquire(timeout=0.3):
+            self._check_cancel(job)
+            if job.detail != "Waiting for a duplicate to finish…":
+                job.detail = "Waiting for a duplicate to finish…"
+                self.on_event("changed", job)
+        try:
+            job.detail = ""
+            ydl.process_ie_result(ie, download=True)
+        finally:
+            lock.release()
 
     def _expand(self, job: Job, playlist: dict):
         self._check_cancel(job)
@@ -457,15 +529,18 @@ class DownloadManager:
         children = []
         with self._lock:
             queued = {j.url for j in self.jobs if not j.is_finished}
-        for idx, e in zip(indices, entries):
+        for idx, e in zip(indices, entries, strict=True):
             url = e.get("url") or e.get("webpage_url")
             if not url or url in queued:
                 continue
             queued.add(url)
-            children.append(Job(
-                url=url, settings=replace(s, playlist_items=""), title=e.get("title") or "",
-                subdir=subdir, prefix=f"{idx:0{width}d} - " if numbered else "",
-                noplaylist=True, ie_key=e.get("ie_key"), depth=job.depth + 1))
+            child = Job(
+                url=url, settings=replace(s, playlist_items=""), subdir=subdir,
+                prefix=f"{idx:0{width}d} - " if numbered else "",
+                noplaylist=True, ie_key=e.get("ie_key"), depth=job.depth + 1,
+                site=job.site, uploader=str(playlist.get("uploader") or playlist.get("channel") or ""))
+            child.absorb(e)
+            children.append(child)
         with self._lock:
             pos = self.jobs.index(job) if job in self.jobs else len(self.jobs)
             self.jobs[pos:pos + 1] = children
@@ -477,11 +552,11 @@ class DownloadManager:
             self.on_event("added", c)
         # the parent's `finally` will call _pump(); the parent is no longer in self.jobs
 
-    def _stem_lock(self, stem: Optional[str]) -> threading.Lock:
+    def _stem_lock(self, stem: str | None) -> threading.Lock:
         with self._lock:
             return self._stem_locks.setdefault(stem or f"\0{id(object())}", threading.Lock())
 
-    def _claim_filename(self, ydl, ie: dict, job: Job) -> Optional[str]:
+    def _claim_filename(self, ydl, ie: dict, job: Job) -> str | None:
         """Give different videos that would share an output name (e.g. identical titles in a
         playlist, or titles differing only in case on Windows) distinct names by appending
         the video id. Without this, parallel jobs overwrite each other's files and later
@@ -526,8 +601,7 @@ class DownloadManager:
             if d.get(key):
                 job.temp_files.add(d[key])
         state["downloaded_any"] = True
-        if not job.title and info.get("title"):
-            job.title = info["title"]
+        job.absorb(info)
         done = d.get("downloaded_bytes") or 0
         total = d.get("total_bytes") or d.get("total_bytes_estimate")
         frac = done / total if total else None
@@ -552,16 +626,16 @@ class DownloadManager:
                 job.total = None
                 job.progress = (i + (frac or 0)) / len(reqs)
             job.detail = f"Part {i + 1}/{len(reqs)}"
-            heights = [f.get("height") for f in reqs if f.get("height")]
-            if heights and not job.format_note:
-                job.format_note = f"{max(heights)}p"
+            if not job.format_note:
+                job.format_note = max((quality_label(f.get("width"), f.get("height")) for f in reqs),
+                                      key=lambda s: int(s[:-1] or 0))
         else:
             job.total = int(total) if total else None
             job.downloaded = done
             job.progress = frac or 0.0
             job.detail = ""
             if info.get("height") and not job.format_note:
-                job.format_note = f"{info['height']}p"
+                job.format_note = quality_label(info.get("width"), info.get("height"))
         if not job.format_note and job.settings.mode == "audio":
             job.format_note = job.settings.audio_format.upper()
         job.progress = min(max(job.progress, 0.0), 1.0)

@@ -1,0 +1,49 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! If a single site stopped working, first try **About > Update yt-dlp**
+        (or the latest release): sites change often and yt-dlp updates usually fix it.
+  - type: input
+    id: version
+    attributes:
+      label: YTDown version
+      description: Shown in the sidebar and on the About page.
+      placeholder: "2.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows 11, Windows 10, macOS, Linux, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options: [Release zip (YTDown.exe), From source (python -m ytdown)]
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link that fails (if you can share it)
+      placeholder: https://...
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Error and log
+      description: The error shown on the download card, and relevant lines from the **Activity** page (Copy button).
+      render: text

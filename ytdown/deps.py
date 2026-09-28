@@ -6,7 +6,6 @@ import shutil
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import yt_dlp
 
@@ -23,7 +22,7 @@ def app_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _find(name: str) -> Optional[str]:
+def _find(name: str) -> str | None:
     """Look next to the app first (portable installs), then on PATH."""
     exe = name + (".exe" if sys.platform == "win32" else "")
     base = app_dir()
@@ -36,15 +35,15 @@ def _find(name: str) -> Optional[str]:
 @dataclass
 class Environment:
     ytdlp_version: str = ""
-    ffmpeg: Optional[str] = None
-    ffprobe: Optional[str] = None
-    aria2c: Optional[str] = None
+    ffmpeg: str | None = None
+    ffprobe: str | None = None
+    aria2c: str | None = None
     js_runtimes: dict = field(default_factory=dict)  # name -> executable path
     has_ejs: bool = False  # bundled YouTube challenge solver scripts (yt-dlp-ejs)
     frozen: bool = False
 
     @property
-    def ffmpeg_dir(self) -> Optional[str]:
+    def ffmpeg_dir(self) -> str | None:
         return str(Path(self.ffmpeg).parent) if self.ffmpeg else None
 
     def problems(self) -> list[str]:

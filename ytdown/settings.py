@@ -12,6 +12,17 @@ from . import APP_NAME
 
 
 def config_dir() -> Path:
+    """Per-user settings folder. Override with YTDOWN_CONFIG_DIR, or make the app portable by
+    creating a folder named `portable_data` next to it (settings then live there)."""
+    override = os.environ.get("YTDOWN_CONFIG_DIR")
+    if override:
+        path = Path(override)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    from .deps import app_dir
+    portable = app_dir() / "portable_data"
+    if portable.is_dir():
+        return portable
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
     elif sys.platform == "darwin":
@@ -67,7 +78,7 @@ _CHOICES = {
     "audio_quality": AUDIO_QUALITIES,
     "sponsorblock": SPONSORBLOCK_MODES,
     "cookies_browser": BROWSERS,
-    "theme": [("dark", ""), ("light", "")],
+    "theme": [("system", ""), ("dark", ""), ("light", "")],
 }
 
 _RANGES = {"max_concurrent": (1, 10), "fragments": (1, 32), "retries": (0, 100)}
@@ -113,8 +124,10 @@ class Settings:
     system_certs: bool = sys.platform == "win32"
     # advanced / UI
     extra_args: str = ""
-    theme: str = "dark"
+    theme: str = "system"
     watch_clipboard: bool = False
+    notify_done: bool = True
+    close_to_tray: bool = False
     window_geometry: str = ""
 
     def __post_init__(self):
@@ -124,7 +137,7 @@ class Settings:
     # persistence ---------------------------------------------------------
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Settings":
+    def from_dict(cls, data: dict) -> Settings:
         """Build settings from untrusted JSON, dropping unknown keys and bad values."""
         s = cls()
         if not isinstance(data, dict):
@@ -155,7 +168,7 @@ class Settings:
         return asdict(self)
 
     @classmethod
-    def load(cls, path: Path | None = None) -> "Settings":
+    def load(cls, path: Path | None = None) -> Settings:
         path = path or config_dir() / "settings.json"
         try:
             return cls.from_dict(json.loads(path.read_text(encoding="utf-8")))

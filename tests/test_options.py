@@ -137,3 +137,13 @@ def test_clean_error():
     raw = ("\x1b[0;31mERROR:\x1b[0m [youtube] x: Unable to download; please report this issue on  "
            "https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the template")
     assert clean_error(raw) == "[youtube] x: Unable to download"
+
+
+@pytest.mark.parametrize("w,h,label", [
+    (1920, 1080, "1080p"), (1920, 872, "1080p"), (1080, 1920, "1080p"), (2560, 1080, "1080p"),
+    (3840, 1600, "2160p"), (640, 480, "480p"), (1440, 1080, "1080p"), (None, 360, "360p"),
+    (176, 144, "144p"),
+])
+def test_quality_label(w, h, label):
+    from ytdown.engine import quality_label
+    assert quality_label(w, h) == label

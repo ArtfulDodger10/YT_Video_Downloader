@@ -1,2 +1,2 @@
 yt-dlp[default]>=2025.11.12
-sv-ttk>=2.6
+PySide6-Essentials>=6.6
