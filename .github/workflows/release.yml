@@ -72,7 +72,7 @@ jobs:
           $notes += "Verify the download with ``SHA256SUMS.txt``."
           Set-Content release-notes.md $notes -Encoding utf8
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: YTDown-windows
           path: |
