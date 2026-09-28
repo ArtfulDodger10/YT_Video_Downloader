@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ytdown"
+dynamic = ["version"]
+description = "Fast, queue-based video & audio downloader (GUI + CLI) powered by yt-dlp"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "ArtfulDodger10" }]
+dependencies = [
+    "yt-dlp[default]>=2025.11.12",
+    "sv-ttk>=2.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyinstaller>=6"]
+
+[project.scripts]
+ytdown = "ytdown.cli:main"
+
+[project.gui-scripts]
+ytdown-gui = "ytdown.gui.app:main"
+
+[project.urls]
+Homepage = "https://github.com/ArtfulDodger10/YT_Video_Downloader"
+
+[tool.setuptools]
+packages = ["ytdown", "ytdown.gui"]
+
+[tool.setuptools.dynamic]
+version = { attr = "ytdown.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
