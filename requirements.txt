@@ -1,2 +1,2 @@
-yt-dlp[default]>=2025.11.12
+yt-dlp[default]>=2026.8.19
 PySide6-Essentials>=6.6
